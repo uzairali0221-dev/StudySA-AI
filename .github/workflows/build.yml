@@ -1,21 +1,54 @@
-name: Inspect Android Project
+name: Build Android App
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  inspect:
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract ZIP
+      - name: Extract Android project
         run: |
           unzip -q "StudySA-AI-Android-Play-Project.zip" -d android-project
 
-      - name: Show everything in ZIP
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Accept Android licenses
         run: |
-          echo "===== ZIP CONTENTS ====="
-          find android-project -type f | sort
+          yes | sdkmanager --licenses || true
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        working-directory: android-project/StudySA-AI-Android
+        run: |
+          gradle assembleDebug --stacktrace
+
+      - name: Find APK
+        run: |
+          echo "===== APK FILES ====="
+          find android-project -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: StudySA-AI-debug
+          path: android-project/StudySA-AI-Android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
