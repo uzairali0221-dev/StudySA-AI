@@ -33,8 +33,14 @@ jobs:
         run: |
           yes | sdkmanager --licenses || true
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.5
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5'
+
+      - name: Check Gradle version
+        run: |
+          gradle --version
 
       - name: Build APK
         working-directory: android-project/StudySA-AI-Android
