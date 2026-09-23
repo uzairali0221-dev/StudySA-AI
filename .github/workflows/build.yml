@@ -1,20 +1,76 @@
-name: Check Repository
+name: Build Android App
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show repository files
+      - name: Extract Android project
         run: |
-          echo "===== ROOT FILES ====="
-          ls -la
-          echo ""
-          echo "===== PROJECT FILES ====="
-          find . -maxdepth 4 -type f | sort
+          unzip -q "StudySA-AI-Android-Play-Project.zip" -d android-project
+
+      - name: Show extracted files
+        run: |
+          echo "===== EXTRACTED PROJECT ====="
+          find android-project -maxdepth 3 -type f | sort | head -200
+
+      - name: Find Gradle wrapper
+        id: gradle
+        run: |
+          GRADLEW=$(find android-project -name gradlew -type f -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew was not found inside the ZIP."
+            echo "The ZIP may contain another folder around the Android project."
+            exit 1
+          fi
+
+          echo "Found Gradle wrapper:"
+          echo "$GRADLEW"
+          echo "path=$GRADLEW" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Make Gradle executable
+        run: chmod +x "${{ steps.gradle.outputs.path }}"
+
+      - name: Build APK
+        run: |
+          GRADLEW="${{ steps.gradle.outputs.path }}"
+          PROJECT_DIR="$(dirname "$GRADLEW")"
+
+          cd "$PROJECT_DIR"
+          "$PWD/gradlew" assembleDebug
+
+      - name: Find APK
+        run: |
+          echo "===== APK FILES ====="
+          find android-project -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: StudySA-AI-debug
+          path: android-project/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
