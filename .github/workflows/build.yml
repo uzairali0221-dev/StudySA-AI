@@ -14,6 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Find project files
+        run: |
+          echo "Repository contents:"
+          find . -maxdepth 3 -type f | sort | head -200
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -23,12 +28,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: ''
+          packages: 'platform-tools'
 
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager --install "platform-tools"
-          yes | sdkmanager --licenses || true
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
 
       - name: Check Android SDK
         run: |
@@ -36,14 +39,39 @@ jobs:
           sdkmanager --version
           adb version
 
+      - name: Find Gradle wrapper
+        id: gradle
+        run: |
+          GRADLEW=$(find . -name gradlew -type f -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: No gradlew file was found."
+            echo "The repository does not appear to contain a Gradle Android project."
+            exit 1
+          fi
+
+          echo "Found Gradle wrapper: $GRADLEW"
+          echo "path=$GRADLEW" >> "$GITHUB_OUTPUT"
+
       - name: Make Gradle executable
-        run: chmod +x ./gradlew
+        run: chmod +x "${{ steps.gradle.outputs.path }}"
 
       - name: Build APK
-        run: ./gradlew assembleDebug
+        run: |
+          GRADLEW="${{ steps.gradle.outputs.path }}"
+          PROJECT_DIR="$(dirname "$GRADLEW")"
+
+          cd "$PROJECT_DIR"
+          "$PWD/gradlew" assembleDebug
+
+      - name: Find APK
+        run: |
+          find . -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            **/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
